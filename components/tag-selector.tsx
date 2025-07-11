@@ -1,5 +1,7 @@
 "use client"
 
+import type React from "react"
+
 import { useState } from "react"
 import { X, Plus, TagIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -13,7 +15,7 @@ interface TagSelectorProps {
   availableTags: Tag[]
   selectedTagIds: string[]
   onTagsChange: (tagIds: string[]) => void
-  onCreateTag?: (name: string) => Promise<string | undefined> // Return the new tag ID
+  onCreateTag?: (name: string) => Promise<string | undefined>
 }
 
 export function TagSelector({ availableTags, selectedTagIds, onTagsChange, onCreateTag }: TagSelectorProps) {
@@ -43,12 +45,21 @@ export function TagSelector({ availableTags, selectedTagIds, onTagsChange, onCre
         if (newTagId) {
           // Automatically add the new tag to the selected tags
           onTagsChange([...selectedTagIds, newTagId])
+          setNewTagName("")
+          setOpen(false)
         }
-        setNewTagName("")
-        setOpen(false)
+      } catch (error) {
+        console.error("Error creating tag:", error)
       } finally {
         setIsCreating(false)
       }
+    }
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      e.preventDefault()
+      handleCreateNewTag()
     }
   }
 
@@ -90,16 +101,16 @@ export function TagSelector({ availableTags, selectedTagIds, onTagsChange, onCre
                         placeholder="New tag name"
                         value={newTagName}
                         onChange={(e) => setNewTagName(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            e.preventDefault()
-                            handleCreateNewTag()
-                          }
-                        }}
+                        onKeyDown={handleKeyDown}
                         className="h-8"
                         disabled={isCreating}
                       />
-                      <Button size="sm" onClick={handleCreateNewTag} disabled={!newTagName.trim() || isCreating}>
+                      <Button
+                        size="sm"
+                        onClick={handleCreateNewTag}
+                        disabled={!newTagName.trim() || isCreating}
+                        type="button"
+                      >
                         {isCreating ? "..." : "Create"}
                       </Button>
                     </div>
@@ -122,16 +133,16 @@ export function TagSelector({ availableTags, selectedTagIds, onTagsChange, onCre
                         placeholder="New tag name"
                         value={newTagName}
                         onChange={(e) => setNewTagName(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            e.preventDefault()
-                            handleCreateNewTag()
-                          }
-                        }}
+                        onKeyDown={handleKeyDown}
                         className="h-8"
                         disabled={isCreating}
                       />
-                      <Button size="sm" onClick={handleCreateNewTag} disabled={!newTagName.trim() || isCreating}>
+                      <Button
+                        size="sm"
+                        onClick={handleCreateNewTag}
+                        disabled={!newTagName.trim() || isCreating}
+                        type="button"
+                      >
                         {isCreating ? "..." : "Create"}
                       </Button>
                     </div>
