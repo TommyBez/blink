@@ -9,8 +9,8 @@ import { Toaster } from "@/components/ui/sonner"
 const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
-  title: "Notes App",
-  description: "A modern note-taking application",
+  title: "Blink - Note Taking App",
+  description: "A modern note-taking application with rich text editing",
     generator: 'v0.dev'
 }
 
