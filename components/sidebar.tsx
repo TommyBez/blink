@@ -1,31 +1,34 @@
 "use client"
 
-import { Book, TagIcon, PlusCircle, Settings, Trash2, StickyNote } from "lucide-react"
+import { useState } from "react"
 import { Button } from "@/components/ui/button"
-import { CreateNotebookDialog } from "@/components/create-notebook-dialog"
-import { CreateTagDialog } from "@/components/create-tag-dialog"
-import { ManageNotebookDialog } from "@/components/manage-notebook-dialog"
-import { ManageTagDialog } from "@/components/manage-tag-dialog"
-import type { Notebook, Tag } from "@/lib/types"
-
-type ActiveFilter = {
-  type: "all" | "notebook" | "tag"
-  id: string | null
-}
+import { Input } from "@/components/ui/input"
+import { ScrollArea } from "@/components/ui/scroll-area"
+import { Separator } from "@/components/ui/separator"
+import { Badge } from "@/components/ui/badge"
+import { CreateNotebookDialog } from "./create-notebook-dialog"
+import { CreateTagDialog } from "./create-tag-dialog"
+import { ManageNotebookDialog } from "./manage-notebook-dialog"
+import { ManageTagDialog } from "./manage-tag-dialog"
+import { useAuth } from "./auth/auth-provider"
+import { Search, Plus, BookOpen, Tag, Settings, LogOut, FileText } from "lucide-react"
+import type { Notebook, Tag as TagType } from "@/lib/types"
+import type { User as SupabaseUser } from "@supabase/supabase-js"
 
 interface SidebarProps {
   notebooks: Notebook[]
-  tags: Tag[]
+  tags: TagType[]
   onCreateNote: () => void
-  activeFilter: ActiveFilter
-  onFilterChange: (filter: ActiveFilter) => void
+  activeFilter: { type: "all" | "notebook" | "tag"; id: string | null }
+  onFilterChange: (filter: { type: "all" | "notebook" | "tag"; id: string | null }) => void
   onNavigateToList: () => void
-  onNotebookCreated: (notebook: Notebook) => void
-  onNotebookUpdated: (notebookId: string, name: string) => void
-  onNotebookDeleted: (notebookId: string) => void
-  onTagCreated: (tag: Tag) => void
-  onTagUpdated: (tagId: string, name: string) => void
-  onTagDeleted: (tagId: string) => void
+  onNotebookCreated: (name: string) => Promise<Notebook | undefined>
+  onNotebookUpdated: (id: string, name: string) => void
+  onNotebookDeleted: (id: string) => void
+  onTagCreated: (name: string) => Promise<string | undefined>
+  onTagUpdated: (id: string, name: string) => void
+  onTagDeleted: (id: string) => void
+  user: SupabaseUser
 }
 
 export function Sidebar({
@@ -41,91 +44,162 @@ export function Sidebar({
   onTagCreated,
   onTagUpdated,
   onTagDeleted,
+  user,
 }: SidebarProps) {
+  const [searchQuery, setSearchQuery] = useState("")
+  const { signOut } = useAuth()
+
+  const filteredNotebooks = notebooks.filter((notebook) =>
+    notebook.name.toLowerCase().includes(searchQuery.toLowerCase()),
+  )
+
+  const filteredTags = tags.filter((tag) => tag.name.toLowerCase().includes(searchQuery.toLowerCase()))
+
   return (
-    <aside className="flex flex-col w-full h-full border-r bg-sidebar">
-      <div className="p-4">
-        <h1 className="text-2xl font-bold">Notes</h1>
-      </div>
-      <div className="p-4">
-        <Button className="w-full" onClick={onCreateNote}>
-          <PlusCircle className="mr-2 h-4 w-4" />
-          New Note
-        </Button>
-      </div>
-      <nav className="flex-1 px-4 space-y-4 overflow-y-auto">
-        <div>
-          <Button
-            variant={activeFilter.type === "all" ? "secondary" : "ghost"}
-            className="w-full justify-start"
-            onClick={() => {
-              onFilterChange({ type: "all", id: null })
-              onNavigateToList()
-            }}
-          >
-            <StickyNote className="mr-2 h-4 w-4" />
-            All Notes
+    <div className="flex flex-col h-full bg-background border-r">
+      {/* Header */}
+      <div className="p-4 border-b">
+        <div className="flex items-center justify-between mb-4">
+          <h1 className="text-xl font-semibold">Notes</h1>
+          <Button onClick={onCreateNote} size="sm">
+            <Plus className="h-4 w-4 mr-2" />
+            New Note
           </Button>
         </div>
-        <div>
-          <div className="flex items-center justify-between mb-2 px-2">
-            <h2 className="text-lg font-semibold tracking-tight">Notebooks</h2>
-            <CreateNotebookDialog onNotebookCreated={onNotebookCreated} />
+
+        {/* Search */}
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+          <Input
+            placeholder="Search notebooks and tags..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-10"
+          />
+        </div>
+      </div>
+
+      {/* Navigation */}
+      <ScrollArea className="flex-1">
+        <div className="p-4 space-y-4">
+          {/* All Notes */}
+          <div>
+            <Button
+              variant={activeFilter.type === "all" ? "secondary" : "ghost"}
+              className="w-full justify-start"
+              onClick={() => {
+                onFilterChange({ type: "all", id: null })
+                onNavigateToList()
+              }}
+            >
+              <FileText className="h-4 w-4 mr-2" />
+              All Notes
+            </Button>
           </div>
-          <div className="space-y-1">
-            {notebooks.map((notebook) => (
-              <div key={notebook.id} className="group flex items-center">
-                <Button
-                  variant={activeFilter.type === "notebook" && activeFilter.id === notebook.id ? "secondary" : "ghost"}
-                  className="flex-1 justify-start"
-                  onClick={() => onFilterChange({ type: "notebook", id: notebook.id })}
-                >
-                  <Book className="mr-2 h-4 w-4" />
-                  {notebook.name}
+
+          <Separator />
+
+          {/* Notebooks */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-sm font-medium text-muted-foreground">Notebooks</h3>
+              <CreateNotebookDialog onNotebookCreated={onNotebookCreated} user={user}>
+                <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
+                  <Plus className="h-4 w-4" />
                 </Button>
-                <ManageNotebookDialog
-                  notebook={notebook}
-                  onNotebookUpdated={onNotebookUpdated}
-                  onNotebookDeleted={onNotebookDeleted}
-                />
-              </div>
-            ))}
+              </CreateNotebookDialog>
+            </div>
+            <div className="space-y-1">
+              {filteredNotebooks.map((notebook) => (
+                <div key={notebook.id} className="flex items-center group">
+                  <Button
+                    variant={
+                      activeFilter.type === "notebook" && activeFilter.id === notebook.id ? "secondary" : "ghost"
+                    }
+                    className="flex-1 justify-start"
+                    onClick={() => {
+                      onFilterChange({ type: "notebook", id: notebook.id })
+                      onNavigateToList()
+                    }}
+                  >
+                    <BookOpen className="h-4 w-4 mr-2" />
+                    <span className="truncate">{notebook.name}</span>
+                  </Button>
+                  <ManageNotebookDialog notebook={notebook} onUpdate={onNotebookUpdated} onDelete={onNotebookDeleted}>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      <Settings className="h-3 w-3" />
+                    </Button>
+                  </ManageNotebookDialog>
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
-        <div>
-          <div className="flex items-center justify-between mb-2 px-2">
-            <h2 className="text-lg font-semibold tracking-tight">Tags</h2>
-            <CreateTagDialog onTagCreated={onTagCreated} />
-          </div>
-          <div className="space-y-1">
-            {tags.map((tag) => (
-              <div key={tag.id} className="group flex items-center">
-                <Button
-                  variant={activeFilter.type === "tag" && activeFilter.id === tag.id ? "secondary" : "ghost"}
-                  className="flex-1 justify-start"
-                  onClick={() => onFilterChange({ type: "tag", id: tag.id })}
-                >
-                  <TagIcon className="mr-2 h-4 w-4" />
-                  {tag.name}
+
+          <Separator />
+
+          {/* Tags */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-sm font-medium text-muted-foreground">Tags</h3>
+              <CreateTagDialog onTagCreated={onTagCreated} user={user}>
+                <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
+                  <Plus className="h-4 w-4" />
                 </Button>
-                <ManageTagDialog tag={tag} onTagUpdated={onTagUpdated} onTagDeleted={onTagDeleted} />
-              </div>
-            ))}
+              </CreateTagDialog>
+            </div>
+            <div className="space-y-1">
+              {filteredTags.map((tag) => (
+                <div key={tag.id} className="flex items-center group">
+                  <Button
+                    variant={activeFilter.type === "tag" && activeFilter.id === tag.id ? "secondary" : "ghost"}
+                    className="flex-1 justify-start"
+                    onClick={() => {
+                      onFilterChange({ type: "tag", id: tag.id })
+                      onNavigateToList()
+                    }}
+                  >
+                    <Tag className="h-4 w-4 mr-2" />
+                    <span className="truncate">{tag.name}</span>
+                    <Badge variant="secondary" className="ml-auto" style={{ backgroundColor: tag.color + "20" }}>
+                      <div className="w-2 h-2 rounded-full" style={{ backgroundColor: tag.color }} />
+                    </Badge>
+                  </Button>
+                  <ManageTagDialog tag={tag} onUpdate={onTagUpdated} onDelete={onTagDeleted}>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      <Settings className="h-3 w-3" />
+                    </Button>
+                  </ManageTagDialog>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
-      </nav>
-      <div className="p-4 border-t mt-auto">
-        <div className="space-y-1">
-          <Button variant="ghost" className="w-full justify-start">
-            <Trash2 className="mr-2 h-4 w-4" />
-            Trash
-          </Button>
-          <Button variant="ghost" className="w-full justify-start">
-            <Settings className="mr-2 h-4 w-4" />
-            Settings
+      </ScrollArea>
+
+      {/* User Profile */}
+      <div className="p-4 border-t">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-2">
+            <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center">
+              <FileText className="h-4 w-4 text-primary-foreground" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium truncate">{user.email}</p>
+            </div>
+          </div>
+          <Button variant="ghost" size="sm" onClick={signOut}>
+            <LogOut className="h-4 w-4" />
           </Button>
         </div>
       </div>
-    </aside>
+    </div>
   )
 }

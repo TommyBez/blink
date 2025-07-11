@@ -3,7 +3,6 @@
 import type React from "react"
 
 import { useState, startTransition } from "react"
-import { Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -16,14 +15,16 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { createTagAction } from "@/app/actions"
-import type { Tag } from "@/lib/types"
+import type { User } from "@supabase/supabase-js"
+import { toast } from "sonner"
 
 interface CreateTagDialogProps {
-  onTagCreated: (tag: Tag) => void
+  children: React.ReactNode
+  onTagCreated: (name: string) => Promise<string | undefined>
+  user: User
 }
 
-export function CreateTagDialog({ onTagCreated }: CreateTagDialogProps) {
+export function CreateTagDialog({ children, onTagCreated, user }: CreateTagDialogProps) {
   const [open, setOpen] = useState(false)
   const [name, setName] = useState("")
   const [isLoading, setIsLoading] = useState(false)
@@ -34,45 +35,48 @@ export function CreateTagDialog({ onTagCreated }: CreateTagDialogProps) {
 
     setIsLoading(true)
     startTransition(async () => {
-      const { success, tag } = await createTagAction({ name: name.trim() })
-      if (success && tag) {
-        onTagCreated(tag)
-        setName("")
-        setOpen(false)
+      try {
+        const tagId = await onTagCreated(name.trim())
+        if (tagId) {
+          setName("")
+          setOpen(false)
+          toast.success("Tag created successfully")
+        }
+      } catch (error) {
+        console.error("Error creating tag:", error)
+        toast.error("Failed to create tag")
+      } finally {
+        setIsLoading(false)
       }
-      setIsLoading(false)
     })
   }
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button variant="ghost" size="icon" className="h-6 w-6">
-          <Plus className="h-4 w-4" />
-          <span className="sr-only">Create tag</span>
-        </Button>
-      </DialogTrigger>
+      <DialogTrigger asChild>{children}</DialogTrigger>
       <DialogContent className="sm:max-w-[425px]">
+        <DialogHeader>
+          <DialogTitle>Create Tag</DialogTitle>
+          <DialogDescription>Create a new tag to categorize your notes.</DialogDescription>
+        </DialogHeader>
         <form onSubmit={handleSubmit}>
-          <DialogHeader>
-            <DialogTitle>Create Tag</DialogTitle>
-            <DialogDescription>Create a new tag to categorize your notes.</DialogDescription>
-          </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid grid-cols-4 items-center gap-4">
-              
+              <Label htmlFor="name" className="text-right">
+                Name
+              </Label>
               <Input
                 id="name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 className="col-span-3"
                 placeholder="Enter tag name"
-                disabled={isLoading}
+                required
               />
             </div>
           </div>
           <DialogFooter>
-            <Button type="submit" disabled={!name.trim() || isLoading}>
+            <Button type="submit" disabled={isLoading || !name.trim()}>
               {isLoading ? "Creating..." : "Create Tag"}
             </Button>
           </DialogFooter>

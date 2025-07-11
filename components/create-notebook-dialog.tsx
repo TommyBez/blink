@@ -3,7 +3,6 @@
 import type React from "react"
 
 import { useState, startTransition } from "react"
-import { Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -16,14 +15,17 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { createNotebookAction } from "@/app/actions"
 import type { Notebook } from "@/lib/types"
+import type { User } from "@supabase/supabase-js"
+import { toast } from "sonner"
 
 interface CreateNotebookDialogProps {
-  onNotebookCreated: (notebook: Notebook) => void
+  children: React.ReactNode
+  onNotebookCreated: (name: string) => Promise<Notebook | undefined>
+  user: User
 }
 
-export function CreateNotebookDialog({ onNotebookCreated }: CreateNotebookDialogProps) {
+export function CreateNotebookDialog({ children, onNotebookCreated, user }: CreateNotebookDialogProps) {
   const [open, setOpen] = useState(false)
   const [name, setName] = useState("")
   const [isLoading, setIsLoading] = useState(false)
@@ -34,45 +36,48 @@ export function CreateNotebookDialog({ onNotebookCreated }: CreateNotebookDialog
 
     setIsLoading(true)
     startTransition(async () => {
-      const { success, notebook } = await createNotebookAction({ name: name.trim() })
-      if (success && notebook) {
-        onNotebookCreated(notebook)
-        setName("")
-        setOpen(false)
+      try {
+        const notebook = await onNotebookCreated(name.trim())
+        if (notebook) {
+          setName("")
+          setOpen(false)
+          toast.success("Notebook created successfully")
+        }
+      } catch (error) {
+        console.error("Error creating notebook:", error)
+        toast.error("Failed to create notebook")
+      } finally {
+        setIsLoading(false)
       }
-      setIsLoading(false)
     })
   }
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button variant="ghost" size="icon" className="h-6 w-6">
-          <Plus className="h-4 w-4" />
-          <span className="sr-only">Create notebook</span>
-        </Button>
-      </DialogTrigger>
+      <DialogTrigger asChild>{children}</DialogTrigger>
       <DialogContent className="sm:max-w-[425px]">
+        <DialogHeader>
+          <DialogTitle>Create Notebook</DialogTitle>
+          <DialogDescription>Create a new notebook to organize your notes.</DialogDescription>
+        </DialogHeader>
         <form onSubmit={handleSubmit}>
-          <DialogHeader>
-            <DialogTitle>Create Notebook</DialogTitle>
-            <DialogDescription>Create a new notebook to organize your notes.</DialogDescription>
-          </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid grid-cols-4 items-center gap-4">
-              
+              <Label htmlFor="name" className="text-right">
+                Name
+              </Label>
               <Input
                 id="name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 className="col-span-3"
                 placeholder="Enter notebook name"
-                disabled={isLoading}
+                required
               />
             </div>
           </div>
           <DialogFooter>
-            <Button type="submit" disabled={!name.trim() || isLoading}>
+            <Button type="submit" disabled={isLoading || !name.trim()}>
               {isLoading ? "Creating..." : "Create Notebook"}
             </Button>
           </DialogFooter>

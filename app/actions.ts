@@ -1,140 +1,274 @@
 "use server"
 
+import { createClient } from "@/lib/supabase"
 import { revalidatePath } from "next/cache"
 import type { Note, Notebook, Tag } from "@/lib/types"
 
-// In a real application, you would use a database.
-// For this example, we'll just simulate the operations.
+// Note actions
+export async function getNotes(userId: string): Promise<Note[]> {
+  const supabase = await createClient()
 
-export async function createNoteAction(payload: { notebookId?: string }): Promise<{ success: boolean; note?: Note }> {
-  console.log("Creating a new note...")
+  const { data: notes, error } = await supabase
+    .from("notes")
+    .select(`
+      *,
+      notebook:notebooks(name),
+      tags:note_tags(tag:tags(*))
+    `)
+    .eq("user_id", userId)
+    .order("updated_at", { ascending: false })
 
-  const newNote: Note = {
-    id: `n${Date.now()}`,
-    title: "Untitled Note",
-    content: "",
-    snippet: "No additional text",
-    createdAt: new Date().toISOString(),
-    notebookId: payload.notebookId || "nb1", // Default to first notebook
-    tags: [],
+  if (error) {
+    console.error("Error fetching notes:", error)
+    return []
   }
 
-  // Simulate database insertion
-  await new Promise((res) => setTimeout(res, 500))
-
-  revalidatePath("/")
-  return { success: true, note: newNote }
+  return (
+    notes.map((note) => ({
+      ...note,
+      tags: note.tags?.map((t: any) => t.tag.id) || [],
+    })) || []
+  )
 }
 
-export async function deleteNoteAction(payload: { noteId: string }): Promise<{ success: boolean; deletedId?: string }> {
-  console.log(`Deleting note ${payload.noteId}...`)
+export async function createNote(userId: string, title: string, notebookId?: string): Promise<Note> {
+  const supabase = await createClient()
 
-  // Simulate database deletion
-  await new Promise((res) => setTimeout(res, 500))
+  // Get the user's first notebook if no notebookId provided
+  let targetNotebookId = notebookId
+  if (!targetNotebookId) {
+    const { data: notebooks } = await supabase.from("notebooks").select("id").eq("user_id", userId).limit(1)
+
+    if (notebooks && notebooks.length > 0) {
+      targetNotebookId = notebooks[0].id
+    }
+  }
+
+  const { data: note, error } = await supabase
+    .from("notes")
+    .insert({
+      title,
+      content: "",
+      snippet: "No additional text",
+      notebook_id: targetNotebookId,
+      user_id: userId,
+    })
+    .select()
+    .single()
+
+  if (error) {
+    throw new Error(`Failed to create note: ${error.message}`)
+  }
 
   revalidatePath("/")
-  return { success: true, deletedId: payload.noteId }
+  return note
 }
 
-export async function updateNoteAction(payload: {
-  noteId: string
-  title?: string
-  content?: string
-  tags?: string[]
-}): Promise<{
-  success: boolean
-}> {
-  if (payload.title) {
-    console.log(`Updating title for note ${payload.noteId}: ${payload.title}`)
+export async function updateNote(noteId: string, updates: Partial<Note>): Promise<Note> {
+  const supabase = await createClient()
+
+  const { data: note, error } = await supabase
+    .from("notes")
+    .update({
+      ...updates,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", noteId)
+    .select()
+    .single()
+
+  if (error) {
+    throw new Error(`Failed to update note: ${error.message}`)
   }
-  if (payload.content) {
-    console.log(`Updating content for note ${payload.noteId}`)
-  }
-  if (payload.tags) {
-    console.log(`Updating tags for note ${payload.noteId}:`, payload.tags)
-  }
-  // This would find and update the note in the database.
-  await new Promise((res) => setTimeout(res, 100))
+
   revalidatePath("/")
-  return { success: true }
+  return note
+}
+
+export async function deleteNote(noteId: string): Promise<void> {
+  const supabase = await createClient()
+
+  const { error } = await supabase.from("notes").delete().eq("id", noteId)
+
+  if (error) {
+    throw new Error(`Failed to delete note: ${error.message}`)
+  }
+
+  revalidatePath("/")
 }
 
 // Notebook actions
-export async function createNotebookAction(payload: { name: string }): Promise<{
-  success: boolean
-  notebook?: Notebook
-}> {
-  console.log(`Creating notebook: ${payload.name}`)
+export async function getNotebooks(userId: string): Promise<Notebook[]> {
+  const supabase = await createClient()
 
-  const newNotebook: Notebook = {
-    id: `nb${Date.now()}`,
-    name: payload.name,
+  const { data: notebooks, error } = await supabase
+    .from("notebooks")
+    .select("*")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: true })
+
+  if (error) {
+    console.error("Error fetching notebooks:", error)
+    return []
   }
 
-  // Simulate database insertion
-  await new Promise((res) => setTimeout(res, 500))
-
-  revalidatePath("/")
-  return { success: true, notebook: newNotebook }
+  return notebooks || []
 }
 
-export async function updateNotebookAction(payload: { notebookId: string; name: string }): Promise<{
-  success: boolean
-}> {
-  console.log(`Updating notebook ${payload.notebookId}: ${payload.name}`)
+export async function createNotebook(userId: string, name: string): Promise<Notebook> {
+  const supabase = await createClient()
 
-  // Simulate database update
-  await new Promise((res) => setTimeout(res, 500))
+  const { data: notebook, error } = await supabase
+    .from("notebooks")
+    .insert({
+      name,
+      user_id: userId,
+    })
+    .select()
+    .single()
+
+  if (error) {
+    throw new Error(`Failed to create notebook: ${error.message}`)
+  }
 
   revalidatePath("/")
-  return { success: true }
+  return notebook
 }
 
-export async function deleteNotebookAction(payload: { notebookId: string }): Promise<{
-  success: boolean
-  deletedId?: string
-}> {
-  console.log(`Deleting notebook ${payload.notebookId}...`)
+export async function updateNotebook(notebookId: string, name: string): Promise<Notebook> {
+  const supabase = await createClient()
 
-  // Simulate database deletion
-  await new Promise((res) => setTimeout(res, 500))
+  const { data: notebook, error } = await supabase
+    .from("notebooks")
+    .update({ name })
+    .eq("id", notebookId)
+    .select()
+    .single()
+
+  if (error) {
+    throw new Error(`Failed to update notebook: ${error.message}`)
+  }
 
   revalidatePath("/")
-  return { success: true, deletedId: payload.notebookId }
+  return notebook
+}
+
+export async function deleteNotebook(notebookId: string): Promise<void> {
+  const supabase = await createClient()
+
+  const { error } = await supabase.from("notebooks").delete().eq("id", notebookId)
+
+  if (error) {
+    throw new Error(`Failed to delete notebook: ${error.message}`)
+  }
+
+  revalidatePath("/")
 }
 
 // Tag actions
-export async function createTagAction(payload: { name: string }): Promise<{ success: boolean; tag?: Tag }> {
-  console.log(`Creating tag: ${payload.name}`)
+export async function getTags(userId: string): Promise<Tag[]> {
+  const supabase = await createClient()
 
-  const newTag: Tag = {
-    id: `t${Date.now()}`,
-    name: payload.name,
+  const { data: tags, error } = await supabase
+    .from("tags")
+    .select("*")
+    .eq("user_id", userId)
+    .order("name", { ascending: true })
+
+  if (error) {
+    console.error("Error fetching tags:", error)
+    return []
   }
 
-  // Simulate database insertion
-  await new Promise((res) => setTimeout(res, 500))
-
-  revalidatePath("/")
-  return { success: true, tag: newTag }
+  return tags || []
 }
 
-export async function updateTagAction(payload: { tagId: string; name: string }): Promise<{ success: boolean }> {
-  console.log(`Updating tag ${payload.tagId}: ${payload.name}`)
+export async function createTag(userId: string, name: string, color = "#3b82f6"): Promise<Tag> {
+  const supabase = await createClient()
 
-  // Simulate database update
-  await new Promise((res) => setTimeout(res, 500))
+  const { data: tag, error } = await supabase
+    .from("tags")
+    .insert({
+      name,
+      color,
+      user_id: userId,
+    })
+    .select()
+    .single()
+
+  if (error) {
+    throw new Error(`Failed to create tag: ${error.message}`)
+  }
 
   revalidatePath("/")
-  return { success: true }
+  return tag
 }
 
-export async function deleteTagAction(payload: { tagId: string }): Promise<{ success: boolean; deletedId?: string }> {
-  console.log(`Deleting tag ${payload.tagId}...`)
+export async function updateTag(tagId: string, name: string, color?: string): Promise<Tag> {
+  const supabase = await createClient()
 
-  // Simulate database deletion
-  await new Promise((res) => setTimeout(res, 500))
+  const updates: any = { name }
+  if (color) updates.color = color
+
+  const { data: tag, error } = await supabase.from("tags").update(updates).eq("id", tagId).select().single()
+
+  if (error) {
+    throw new Error(`Failed to update tag: ${error.message}`)
+  }
 
   revalidatePath("/")
-  return { success: true, deletedId: payload.tagId }
+  return tag
+}
+
+export async function deleteTag(tagId: string): Promise<void> {
+  const supabase = await createClient()
+
+  const { error } = await supabase.from("tags").delete().eq("id", tagId)
+
+  if (error) {
+    throw new Error(`Failed to delete tag: ${error.message}`)
+  }
+
+  revalidatePath("/")
+}
+
+// Note-Tag relationship actions
+export async function addTagToNote(noteId: string, tagId: string): Promise<void> {
+  const supabase = await createClient()
+
+  const { error } = await supabase.from("note_tags").insert({
+    note_id: noteId,
+    tag_id: tagId,
+  })
+
+  if (error) {
+    throw new Error(`Failed to add tag to note: ${error.message}`)
+  }
+
+  revalidatePath("/")
+}
+
+export async function removeTagFromNote(noteId: string, tagId: string): Promise<void> {
+  const supabase = await createClient()
+
+  const { error } = await supabase.from("note_tags").delete().eq("note_id", noteId).eq("tag_id", tagId)
+
+  if (error) {
+    throw new Error(`Failed to remove tag from note: ${error.message}`)
+  }
+
+  revalidatePath("/")
+}
+
+// Authentication actions
+export async function signOut(): Promise<void> {
+  const supabase = await createClient()
+
+  const { error } = await supabase.auth.signOut()
+
+  if (error) {
+    throw new Error(`Failed to sign out: ${error.message}`)
+  }
+
+  revalidatePath("/")
 }
