@@ -3,7 +3,7 @@
 import type React from "react"
 
 import { createContext, useContext, useEffect, useState } from "react"
-import { createClientComponentClient } from "@/lib/supabase"
+import { createClientComponentClient } from "@/lib/supabase-client"
 import type { User } from "@supabase/supabase-js"
 
 interface AuthContextType {
